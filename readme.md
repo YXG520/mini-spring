@@ -1,8 +1,8 @@
 # spring的实现及其疑惑解答
 ![img_1.png](img_1.png)
-# spring的两种容器
+# 1 spring的两种容器
 
-## 使用方式（spring如何获取需要注册bean的类）!!!
+## 1.1 使用方式（spring如何获取需要注册bean的类）!!!
 
 ```java
    public static void main(String[] args) {
@@ -17,10 +17,10 @@
 ```
 
 
-## ClassPathXmlApplicationContext
+### 1.1.1 ClassPathXmlApplicationContext
 可以参考代码中的#A，可知道这里的容器创建借助的是spring.xml这个配置文件
 
-## AnnotationConfigApplicationContext
+### 1.1.2 AnnotationConfigApplicationContext
 这种方式是基于注解的实现，AppConfig.class，而AppConfig
 中得内容如下图所示：可以看到我们定义了spring得扫描的路径，spring
 会自动扫描"com.zhouyu"包下的所有java文件并且生成相应的bean，也可以
@@ -28,7 +28,7 @@
 ![img_2.png](img_2.png)
 
 
-## spring获取bean的相关细节
+## 1.2 spring获取bean的相关细节
 大概流程：
 解析配置类：new一个ApplicationContext并且传递配置类->解析配置类获取componentScan注解中规定的路径->扫描路径下的java类->注册为容器中的bean
 
@@ -37,7 +37,6 @@
 调用这个容器的构造方法，我们需要将指定的配置类传递给它，因为配置类中通过
 @componentScan注解规定了扫描的包的全限定名，然后将这个限定名转换成
 路径，随后扫描这个路径下的所有java类，并将其注册到IOC容器中称为bean。
-
 
 ```java
 package com.zhouyu;
@@ -50,11 +49,11 @@ public class AppConfig {
 }
 
 ```
-## 加入IOC容器中，为什么需要两个map？
+## 1.3 加入IOC容器中，为什么需要两个map？
 在扫描一个类时，会首先查看类上是否有@Component字段，如果有则说明
 需要加入IOC的容器中，否则不需要，如果需要加入容器，则需要创建两个map。
 
-### 接下来弄清楚这两个map是什么，
+### 1.3.1 接下来弄清楚这两个map是什么，
 
 首先是定义Map，我们叫BeanDefinitionMap，这个map中的value是BeanDefinition类，
 存储的是一个类的元数据，包括但不限于这个类的Class对象，单例还是多例等，
@@ -66,7 +65,7 @@ key是其类中@Component注解的指定值，这个map是spring创建bean时的
 其key是@Component注解的指定值，其value为spring启动时就创建的对象。
 
 
-### 为什么需要这两个map？
+### 1.3.2 为什么需要这两个map？
 
 这两个`map`在Spring框架中扮演重要角色，它们分别用于存储bean的元数据(`BeanDefinition`)和单例bean的实例。我们分开解释它们的作用：
 
@@ -92,7 +91,7 @@ key是其类中@Component注解的指定值，这个map是spring创建bean时的
 这也是当component中规定一个类为多例时不不用放入map的原因，
 主要是因为单例池就是为了避免创建重复的实例。
 
-## 创建单例bean和多例bean的过程
+## 1.4 创建单例bean和多例bean的过程
 首先会传入一个字符串调用ApplicationContext的getBean方法，
 该方法首先会通过bean的定义map查询对应类的元数据，
 元数据包含了该类是支持单例还是多例，如果是单例会
@@ -100,7 +99,7 @@ key是其类中@Component注解的指定值，这个map是spring创建bean时的
 会创建一个新的实例并返回。
 
 
-## 为什么可以通过字符串就可以从容器中取到对应的bean？
+## 1.5 为什么可以通过字符串就可以从容器中取到对应的bean？
 > 这里的容器实际上是一个map对象，这里的字符串在类上的@Component
 > 的注解中声明和bean对象唯一绑定在一起(UserService类)，在扫描
 > 的时候会解析@Component注解，然后将其放入到beanDefinitionMap中
@@ -124,15 +123,15 @@ public class UserService {
 }
 ```
 
-## 如何创建单例和多例bean？
+## 1.6 如何创建单例和多例bean？
 扫描阶段会判断这个类中是否有@Scope注解，如果有就会查看其值是否是
 "prototype", 如果是则
 
 
-# spring的依赖注入的实现方式
+# 2 spring的依赖注入的实现方式
 
-## 什么是依赖注入？
-### spring中什么是依赖？
+## 2.1 什么是依赖注入？
+### 2.1.1 spring中什么是依赖？
 一个类中的某一个属性是一个对象，那么可以称该类依赖这个对象。
 
 ![img_3.png](img_3.png)
@@ -149,7 +148,7 @@ public class Engine {
     // ... Engine 类的实现
 }
 ```
-### 什么是注入？
+### 2.1.2 什么是注入？
 在Spring中，注入（Injection）是指将一个对象自动地赋值给另一个对象的属性、setter方法或构造方法。这是通过Spring的IoC（控制反转）容器完成的，它负责创建对象，绑定它们的依赖关系，并提供完成初始化的对象。
 
 注入主要有三种形式：
@@ -194,10 +193,10 @@ public class Engine {
 
 在Spring中，注入的主要目的是实现解耦。通过自动管理对象的创建和它们的依赖关系，可以使代码更加模块化，更易于测试和维护。此外，通过使用配置，你可以轻松地更改注入的实际实现，而无需修改代码。
 
-### 那依赖注入呢？
+### 2.1.3 那依赖注入呢？
 ![img_4.png](img_4.png)
 
-### 在Spring框架中，依赖注入（Dependency Injection, DI）是一种实现控制反转（Inversion of Control, IoC）的技术，为什么？
+### 2.1.4 在Spring框架中，依赖注入（Dependency Injection, DI）是一种实现控制反转（Inversion of Control, IoC）的技术，为什么？
 
 **控制反转（IoC）**是一种设计原则，它的核心思想是将对象的创建和管理从它们使用的代码中移除，把这些责任交给一个外部的实体
 （通常是一个框架或容器），我们都知道创建一个对象的时候
@@ -206,7 +205,7 @@ public class Engine {
 交给IOC容器完成就可以称为控制反转，而“依赖注入”就是实现
 这个第三方对象自动赋值的一种方式。**
 
-### 依赖注入的实现过程
+### 2.1.5 依赖注入的实现过程
 
 以属性上依赖注入为例：
 
@@ -217,7 +216,7 @@ public class Engine {
 此时我们会根据这个属性名调用getBean方法从单例池中获取或者创建一个bean（bean不存在就创建，否则返回），
 然后赋值给这个属性，就这样完成了依赖注入。
 
-# BeanNameAware接口实现捕获自身Bean的名称
+# 3 BeanNameAware接口实现捕获自身Bean的名称
 
 这是什么意思呢？
 以UserService类为例，大概就是说我现在想要知道自身在IOC容器中的名称，并且赋值给自己的beanName属性
@@ -232,21 +231,21 @@ if (instance instanceof BeanNameAware) {
     ((BeanNameAware)instance).setBeanName(beanName);
 }
 ```
-# 扩展接口InitializingBean
+# 4 扩展接口InitializingBean
 一般spring创建bean的过程中，在完成依赖注入后，会调用这个接口的afterPropertiesSet
 方法，一般这个方法用于属性验证，比如属性是否是空，为空则抛异常 。
 
 
-# 扩展接口BeanPostProcessor实现初始化前、后、属性赋值后的扩展操作。
+# 5 扩展接口BeanPostProcessor实现初始化前、后、属性赋值后的扩展操作。
 
-## 为什么要这个接口?
+## 5.1 为什么要这个接口?
 因为方便扩展，针对某一些特殊的bean执行一些特殊的处理操作，AOP就是基于
 这个扩展机制实现的 
 
-## spring框架的实现中，有一个beanPostProcessors接口，为什么有好几个实现类（体现在有一个专门的列表来存储它们）
+## 5.2 spring框架的实现中，有一个beanPostProcessors接口，为什么有好几个实现类（体现在有一个专门的列表来存储它们）
 ![img_5.png](img_5.png)
 
-## 那beanPostProcessor接口的所有实现是不是对所有的bean都会生效
+## 5.3 那beanPostProcessor接口的所有实现是不是对所有的bean都会生效
 
 是的，BeanPostProcessor 对 Spring 容器中所有的 bean 都会生效。当 Spring 容器在初始化 bean 的时候，它会遍历所有注册的 BeanPostProcessor，并对每一个 bean 调用 postProcessBeforeInitialization 和 postProcessAfterInitialization 方法。
 
@@ -279,7 +278,7 @@ public class CustomBeanPostProcessor implements BeanPostProcessor {
 ```
 
 
-## 所有我可以理解为，如果需要对一个bean实现切面，我在postProcessAfterInitialization中判断一下该bean是否有切点，如果有就生成一个代理对象
+## 5.4 所有我可以理解为，如果需要对一个bean实现切面，我在postProcessAfterInitialization中判断一下该bean是否有切点，如果有就生成一个代理对象
 是的，你的理解是正确的。使用 BeanPostProcessor 的 postProcessAfterInitialization 方法来创建代理对象是 AOP（Aspect-Oriented Programming，面向切面编程）在 Spring 中的常见实现方式。
 
 在 postProcessAfterInitialization 方法中，你可以检查 bean 是否具有与切点相关的注解或其他标识，然后根据需要创建一个代理对象。这个代理对象可以在目标方法调用前后插入额外的逻辑，如记录、事务管理等。
@@ -344,7 +343,7 @@ public class AOPBeanPostProcessor implements BeanPostProcessor {
 }
 ```
 
-## 如何使用这些BeanPostProcessor，毕竟有多个
+## 5.5 如何使用这些BeanPostProcessor，毕竟有多个
 当你有多个 BeanPostProcessor 时，Spring 会按照它们的优先级和声明的顺序来调用它们。
 你可以通过实现 org.springframework.core.Ordered 接口或使用 @Order 注解来控制 BeanPostProcessor 的执行顺序。
 
@@ -379,7 +378,7 @@ public class FirstBeanPostProcessor implements BeanPostProcessor, Ordered {
 }
 ```
 
-## 如何利用BeanPostProcessor实现预处理和后处理功能？
+## 5.6 如何利用BeanPostProcessor实现预处理和后处理功能？
 首先定义一个BeanPostProcessor接口，这个接口中有以下几种方法：
 （1）postProcessBeforeInitialization
 （2）postProcessAfterInitialization
@@ -434,15 +433,15 @@ if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
 后者会调用postProcessAfterInitialization方法。
 就这样完成了预处理和后处理。
 
-## 如果有多个实现类实现了BeanPostProcessor接口，如何对他们排序？
+## 5.7 如果有多个实现类实现了BeanPostProcessor接口，如何对他们排序？
 
 方法一：定义一个@SortBeanPostProcessor注解，值是实现类的优先级，
 当创建beanDefinition的时候会扫描到该注解并且取出优先级，然后在加入list的时候
 会根据优先级进行排序。
 
-# spring AOP的实现
+# 6 spring AOP
 
-是基于BeanPostProcessor实现，首先这个processor的postProcessAfterInitialization
+实现是基于BeanPostProcessor实现，首先这个processor的postProcessAfterInitialization
 是整个spring创建过程中的最后一环，所以我们可以利用这个方法实现AOP。
 
 如果我们要启用spring的AOP功能，就需要在AppConfig配置类上启用@EnableAspectAutoProxy注解，
@@ -452,16 +451,16 @@ if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
 在BeanPostProcessor的方法中，会找一个配置类中的切点相关的注解，然后生成一个代理对象并且
 返回，这个代理对象包含了需要执行切点方法，包括前后置方法，以及被代理的方法
 
-# spring AOP
-## 如何实现spring AOP
+## 6.1 如何实现spring AOP
 IOC容器里有很多bean，但也是分种类的，有切面bean，也有业务bean。
 
 首先会扫描装有@Component所有类，创建并且收集所有带有@Aspect注解的切面Bean，然后找到带有
 @Before，@After等字样的注解，这些注解中指明了应用通知/切点的类，然后中将其通过map缓存起来，
-，等到后面生成带有切点的业务bean的时候会通过缓存查询到相应的方法，然后将原方法和加入了前后置通知
-的方法绑定在一起，生成一个代理对象，并将这个代理对象返回给IOC容器
+map的key是bean的名字，value是一个列表，存储了所有的通知及其绑定的信息，比如通知的路径，表达式等，
+，等到后面创建bean时，会根据map判断自己是否被切面定义了，如果是，会通过map查询到相应的切点路径，
+然后将原方法和加入了前后置通知的方法绑定在一起，生成一个代理对象，并将这个代理对象返回给IOC容器。
 
-# spring AOP会最终生成一个代理对象，这个代理对象是如何生成的呢？
+## 6.2 spring AOP会最终生成一个代理对象，这个代理对象是如何生成的呢？
 
 是基于cglib实现的AOP代理对象，cglib是基于继承机制的，比如cglib要为存在切点的UserServiceImpl对象
 生成一个代理对象，首先创建一个叫UserServiceImplProxy的子类继承UserServiceImpl类，
@@ -508,18 +507,18 @@ public class UserServiceImplProxy extends UserServiceImpl {
 问：为什么不对代理对象进行属性填充？
 > 因为没有必要，代理对象的关注点是切面，属性由被代理对象使用，所以不填充
 
-## 1 Spring bean创建的生命周期（也是Spring bean的生命周期）
+## 6.3 Spring bean创建的生命周期（也是Spring bean的生命周期）
 
 @ComponentScan获取扫描包->通过@Component获取到待托管类-> 获得类实例化（通过反射调用无参构造方法）
 的对象-> 属性填充（依赖注入）-> 初始化(spring提供的InitializingBean接口，有一个afterPropertiesSet方法，属性填充完后会调)
 -> 经过BeanPostProcessor可能会生成AOP代理对象（若无AOP则实例化后的对象就是Bean对象） -> Bean对象
 
-## 如果一个spring @component类有两个带参数的构造方法，构建bean会发生什么？
+## 6.4 如果一个spring @component类有两个带参数的构造方法，构建bean会发生什么？
 > 会报错：没有默认的构造方法，spring不知道哪一个构造方法更好，但是如果这两个
 > 构造方法中有一个是无参构造，那么久会调用这个无参方法，
 > 此外如果只有一个带参数的构造方法，spring也不会报错。
 
-## 如果一个@Component类只有一个带参数的构造方法，spring也不会报错，而且这个参数的类型是另一个对象，此时会怎么去spring中找到对应的bean并且完成注入？
+## 6.5 如果一个@Component类只有一个带参数的构造方法，spring也不会报错，而且这个参数的类型是另一个对象，此时会怎么去spring中找到对应的bean并且完成注入？
 > 此时会通过spring容器中通过缓存先按照参数类型，再按照参数名字去查找bean。
 
 问：为什么是先byType，再byName呢？
@@ -563,20 +562,20 @@ public class Config {
 }
 ```
 
-# 动态代理实现AOP
+# 7 动态代理实现AOP
 
 强烈推荐看看下面这篇文章，讲解了为什么实现AOP使用cglib动态代理而不是jdk代理
 
 [浅析Spring中AOP的实现原理——动态代理](https://www.cnblogs.com/tuyang1129/p/12878549.html)
 
-# spring事务
-## spring事务的实现
+# 8 spring事务
+## 8.1 spring事务的实现
 spring事务也是通过AOP机制实现的，而AOP会导致生成一个代理对象，
 所以如果我们想要让事务成功调用，必须使用代理对象调用这个被@Transaction修饰
 的方法，而不能使用被代理对象调用事务方法，否则事务会不起作用。
 
-## spring事务的失效
-### 因为没有正确调用导致的事务失效
+## 8.2 spring事务的失效
+### 8.2.1 因为没有正确调用导致的事务失效
 下面case1中，当程序调用B完成后会抛异常，因为B是一个事务方法，按照正常的逻辑
 抛异常后会回滚，即数据插入失败，但是事实上插入成功了，这就是因为事务失效了。
 
@@ -646,7 +645,7 @@ spring为什么能够注入代理自己的代理对象，是怎么实现的呢�
 > 延迟赋值，所以后面等到代理对象又完成后再回过头来给myService赋值，就这样
 > 完成了”注入代理自己的代理对象“的动作
 
-### 因为抛异常导致的事务失效
+### 8.2.2 因为抛异常导致的事务失效
 
 REQUIRES_NEW:首先介绍一下事务的一个叫做REQUIRES_NEW的传播级别，大概就是在Spring框架中，REQUIRES_NEW是一种事务传播级别，它表示当一个事务性方法被另一个事务性方法调用时，应该如何处理事务。
 当一个方法被标记为REQUIRES_NEW传播级别时，无论调用它的方法是否在事务中，都会为此方法启动一个全新的事务。如果已经存在一个事务，那么这个已经存在的事务将会被挂起，直到标记为REQUIRES_NEW的方法完成执行。
@@ -683,8 +682,8 @@ public class MyService {
 }
 ```
 
-# 疑问点
-## 1 
+# 9 疑问点
+## 9.1 
 
 ```java
 // 方法一：
@@ -739,5 +738,5 @@ public class BeanDefinition {
 针对方法二，调用过程是：
 
 
-# 为什么需要earlyReferenceMap？
+## 9.2为什么需要二级缓存earlyReferenceMap？
 当对象A有一个类型为B的属性时，这个时候A先生成
