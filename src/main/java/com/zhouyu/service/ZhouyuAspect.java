@@ -4,11 +4,11 @@ import com.spring.Aspect;
 import com.spring.Before;
 import com.spring.Component;
 
-@Aspect
+//@Aspect
 @Component("zhouyuAspect")
 public class ZhouyuAspect {
-    @Before("public void com.zhouyu.service.UserService.test()")
-    public void before() {
-        System.out.println("zhouyuAspect的前置Aop");
-    }
+//    @Before("com.zhouyu.service.UserService.test()")
+//    public void before() {
+//        System.out.println("zhouyuAspect的前置Aop");
+//    }
 }

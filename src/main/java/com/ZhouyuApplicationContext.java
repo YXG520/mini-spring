@@ -1,33 +1,56 @@
-package com.spring;
+package com;
+
+import com.pojo.AdviceInfo;
+import com.spring.*;
+import com.zhouyu.service.OrderService;
 
 import java.io.File;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ZhouyuApplicationContext {
     private Class configClass;
 
     // 单例池
-    private ConcurrentHashMap<String, Object> singletonObjects = new ConcurrentHashMap<>();
-    private ConcurrentHashMap<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
-    private List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
+    public static ConcurrentHashMap<String, Object> singletonObjects = new ConcurrentHashMap<>();
+    // 定义池
+    public static ConcurrentHashMap<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
+    public List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
+
+    public static Map<String, List<AdviceInfo>> joinPointMap = new ConcurrentHashMap<>();
+
+    public ZhouyuApplicationContext() {
+
+    }
+
     public ZhouyuApplicationContext(Class configClass) throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
         this.configClass = configClass;
         System.out.println("调用构造方法");
         // 扫描
         scan(configClass);
 
+        System.out.println("扫描后，beanDefinitionMap为："+beanDefinitionMap.toString());
+        // 先生成所有的切面bean
+
+        //
         for (String beanName : beanDefinitionMap.keySet()) {
             BeanDefinition beanDefinition = beanDefinitionMap.get(beanName);
+            System.out.println("----beanDefinition.getClazz()： "+beanDefinition.getClazz() + ", 是否单例:"+beanDefinition.getScope().equals("singleton")
+            + ", 是否已经在单例池子中：" + singletonObjects.containsKey(beanName));
+
             // 如果发现是单例bean，直接加入单例池
-            if (beanDefinition.getScope().equals("singleton")) {
+            if (beanDefinition.getScope().equals("singleton") && !singletonObjects.containsKey(beanName)) {
                 Object bean = createBean(beanName,beanDefinition); // 因为是初始化检索bean阶段，所以还是需要创建bean的实例
                 singletonObjects.put(beanName, bean);//放入单例池中
-                System.out.println("成功将bean放入单例池中");
+                System.out.println("beanName:"+beanName+":成功将bean放入单例池中");
             } else {
                 // 如果是多例
             }
@@ -44,10 +67,13 @@ public class ZhouyuApplicationContext {
             // 依赖注入
             for (Field declaredField : clazz.getDeclaredFields()) {
                 if (declaredField.isAnnotationPresent(Autowired.class)) {
-
+                    System.out.println("declaredField.getName(): " + declaredField.getName()
+                            + ", 探测获取bean："+  beanDefinitionMap.get(declaredField.getName()));
                     Object bean = getBean(declaredField.getName());
+                    System.out.println(", bean是否为空：" + (bean == null));
+
                     if (bean == null) {
-                        throw new RuntimeException("没有获取到第三方bean");
+                        throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
                     }
                     declaredField.setAccessible(true);
                     declaredField.set(instance, bean);
@@ -62,7 +88,6 @@ public class ZhouyuApplicationContext {
             // BeanPostProcessor扩展机制，可以针对初始化前，初始化后，属性赋值后做一些其他操作
             for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
                 instance = beanPostProcessor.postProcessBeforeInitialization(instance,beanName);
-
             }
 
             // 初始化
@@ -74,7 +99,7 @@ public class ZhouyuApplicationContext {
                 instance = beanPostProcessor.postProcessAfterInitialization(instance,beanName);
 
             }
-
+            System.out.println("返回instance: "+ beanName);
             return instance;
         } catch (InstantiationException e) {
             e.printStackTrace();
@@ -90,11 +115,14 @@ public class ZhouyuApplicationContext {
         return null;
     }
 
+    /*
+        扫描所有注册类
+     */
     private void scan(Class configClass) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         // 解析配置类：获取componentScan注解的路径->扫描路径下的java类->注册为容器中的bean
         ComponentScan scAnnotation = (ComponentScan) configClass.getDeclaredAnnotation(ComponentScan.class);
         String path = scAnnotation.value();
-        System.out.println(path);
+        System.out.println("path:"+path);
         path = path.replace(".","/");
         // 三种类加载器：Bootstrap ->jre/lib
         // Ext -> jre/ext/lib
@@ -115,7 +143,7 @@ public class ZhouyuApplicationContext {
                 if (fileName.endsWith(".class")) {
                     String className = fileName.substring(fileName.indexOf("com"), fileName.indexOf(".class"));
                     className = className.replace("\\",".");
-                    System.out.println(className);
+                    System.out.println("全限定名："+className);
                     Class<?> clazz = classLoader.loadClass(className);
                     if (clazz.isAnnotationPresent(Component.class)) {
                         // 判断当前的bean是一个单例bean还是prototype的bean
@@ -124,19 +152,84 @@ public class ZhouyuApplicationContext {
                         Component componentAnnotation = clazz.getDeclaredAnnotation(Component.class);
                         String beanName = componentAnnotation.value();
 
-                        // 当解析到BeanPostProcessor的实现类时候需要存起来
+                        // 当解析到BeanPostProcessor的实现类时需要存起来
                         if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
                             // 这一行实际上应该走spring创建bean的逻辑，因为ZhouyuBeanPostProcessor内部可能有第三方依赖
                             // 这样的话，spring内部的逻辑也能进行依赖注入
                             BeanPostProcessor instance = (BeanPostProcessor) clazz.getDeclaredConstructor().newInstance();
-                            System.out.println("beanName是: "+ beanName);
+                            System.out.println("解析到BeanPostProcessor的实现类，beanName是: "+ beanName);
 
 //                            BeanPostProcessor instance = (BeanPostProcessor) getBean(beanName);
                             beanPostProcessorList.add(instance);
                         }
 
+                        // 处理切面类
+                        if (clazz.isAnnotationPresent(Aspect.class)) {
+                            // 遍历切面类中的所有方法
+                            for (Method method:clazz.getDeclaredMethods()) {
+                                // 查看是否有切面前置通知
+                                if (method.isAnnotationPresent(Before.class)) {
+                                    // 切点 pointcut
+                                    String expression = method.getAnnotation(Before.class).value();
 
+                                    // 分裂表达式获取该通知适用的所有方法
+                                    String[] joinPoints = expression.split(";");
 
+                                    for (String joinPointClass : joinPoints) {
+                                        System.out.println("joinPointClassPath:"+joinPointClass);
+                                        String[] affectedLevels = joinPointClass.split("\\.");
+                                        System.out.println("length: "+affectedLevels.length);
+                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
+                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
+                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
+                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
+                                        }
+                                        joinPointMap.get(affectedBeanName).add(ai);
+                                    }
+                                }
+                                // 查看是否有切面后置通知
+                                if (method.isAnnotationPresent(After.class)) {
+                                    // 切点 pointcut
+                                    String expression = method.getAnnotation(After.class).value();
+
+                                    // 分裂表达式获取该通知适用的所有方法
+                                    String[] joinPoints = expression.split(";");
+
+                                    for (String joinPointClass : joinPoints) {
+                                        System.out.println("joinPointClassPath:"+joinPointClass);
+                                        String[] affectedLevels = joinPointClass.split("\\.");
+                                        System.out.println("length: "+affectedLevels.length);
+                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
+                                        AdviceInfo ai = new AdviceInfo("After", beanName, method.getName(), affectedBeanName);
+                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
+                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
+                                        }
+                                        joinPointMap.get(affectedBeanName).add(ai);
+                                    }
+                                }
+                                  // 查看是否有切面相关的环绕通知
+                                if (method.isAnnotationPresent(Around.class)) {
+                                    // 切点 pointcut
+                                    String expression = method.getAnnotation(Around.class).value();
+
+                                    // 分裂表达式获取该通知适用的所有方法
+                                    String[] joinPoints = expression.split(";");
+
+                                    for (String joinPointClass : joinPoints) {
+                                        System.out.println("joinPointClassPath:"+joinPointClass);
+                                        String[] affectedLevels = joinPointClass.split("\\.");
+                                        System.out.println("length: "+affectedLevels.length);
+                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
+                                        System.out.println("affectedBeanName: "+affectedBeanName);
+                                        AdviceInfo ai = new AdviceInfo("Around", beanName, method.getName(), affectedBeanName);
+                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
+                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
+                                        }
+                                        joinPointMap.get(affectedBeanName).add(ai);
+                                    }
+                                }
+                            }
+                        }
                         BeanDefinition beanDefinition = new BeanDefinition();
                         beanDefinition.setClazz(clazz);
                         if (clazz.isAnnotationPresent(Scope.class)) {
@@ -145,6 +238,7 @@ public class ZhouyuApplicationContext {
                         } else {
                             beanDefinition.setScope("singleton");
                         }
+                        System.out.println("成功将bean：" + beanName + "加入到definitionMap中, 此时beanDefinition为："+beanDefinition.getClazz());
                         beanDefinitionMap.put(beanName, beanDefinition);
 
                     }
@@ -154,10 +248,25 @@ public class ZhouyuApplicationContext {
         }
     }
 
+    public static String lowercaseFirstLetter(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+        char firstChar = Character.toLowerCase(input.charAt(0));
+        if (input.length() > 1) {
+            return firstChar + input.substring(1);
+        } else {
+            return String.valueOf(firstChar);
+        }
+    }
+
     public Object getBean(String beanName) {
+
         if (beanDefinitionMap.containsKey(beanName)) {
             BeanDefinition beanDefinition = beanDefinitionMap.get(beanName);
+            System.out.println("获取到beanDefinition： " + beanDefinition.getClazz() + ", "+beanDefinition.getScope());
             if (beanDefinition.getScope().equals("singleton")) {
+
                 Object o = singletonObjects.get(beanName);
                 return o;
             } else {

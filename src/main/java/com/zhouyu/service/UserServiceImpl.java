@@ -5,12 +5,12 @@ import com.spring.BeanNameAware;
 import com.spring.Component;
 import com.spring.InitializingBean;
 
-@Component("userService")
+@Component("userServiceImpl")
 //@Scope("prototype")
 public class UserServiceImpl implements BeanNameAware, InitializingBean, UserService {
 
-    @Autowired
-    private OrderService orderService;
+//    @Autowired
+//    private OrderService orderService;
 
     // 获取当前bean的名字
     private String beanName;
@@ -35,12 +35,32 @@ public class UserServiceImpl implements BeanNameAware, InitializingBean, UserSer
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        System.out.println("初始化");
+        System.out.println("afterPropertiesSet初始化");
     }
 
     public void test() {
-        System.out.println(orderService);
+//        System.out.println(orderService);
         System.out.println(beanName);
         System.out.println(name);
+    }
+
+    @Override
+    public void before1() {
+        System.out.println("执行与前置通知绑定的方法1");
+    }
+
+    @Override
+    public void before2() {
+        System.out.println("执行与前置通知绑定的方法2");
+    }
+
+    @Override
+    public void after() {
+        System.out.println("执行与后置通知绑定的方法");
+    }
+
+    @Override
+    public void around() {
+        System.out.println("执行与环绕通知绑定的方法");
     }
 }

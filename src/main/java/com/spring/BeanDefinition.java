@@ -4,6 +4,16 @@ public class BeanDefinition {
     private Class clazz;
     private String scope;
 
+    private boolean isAspect;
+
+    public boolean isAspect() {
+        return isAspect;
+    }
+
+    public void setAspect(boolean aspect) {
+        isAspect = aspect;
+    }
+
     public Class getClazz() {
         return clazz;
     }
