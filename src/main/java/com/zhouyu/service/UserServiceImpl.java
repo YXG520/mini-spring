@@ -42,7 +42,7 @@ public class UserServiceImpl implements BeanNameAware, InitializingBean, UserSer
 //        System.out.println(orderService);
 //        System.out.println(beanName);
 //        System.out.println(name);
-        System.out.println("执行orderService:"+orderService);
+        System.out.println("测试依赖是否注入成功，orderService:"+orderService);
     }
 
     @Override

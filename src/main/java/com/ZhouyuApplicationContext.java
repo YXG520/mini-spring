@@ -175,68 +175,20 @@ public class ZhouyuApplicationContext {
                                 if (method.isAnnotationPresent(Before.class)) {
                                     // 切点 pointcut
                                     String expression = method.getAnnotation(Before.class).value();
-
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的方法
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
+                                    handleAdvices(method,className,beanName,"Before", expression);
                                 }
                                 // 查看是否有切面后置通知
                                 if (method.isAnnotationPresent(After.class)) {
                                     // 切点 pointcut
                                     String expression = method.getAnnotation(After.class).value();
+                                    handleAdvices(method,className,beanName,"After", expression);
 
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-//                                        AdviceInfo ai = new Advico("After", beanName, method.getName(), affectedBeanName);eInf
-//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"After", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
                                 }
                                   // 查看是否有切面相关的环绕通知
                                 if (method.isAnnotationPresent(Around.class)) {
                                     // 切点 pointcut
                                     String expression = method.getAnnotation(Around.class).value();
-
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-                                        System.out.println("affectedBeanName: "+affectedBeanName);
-//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"Around", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
+                                    handleAdvices(method,className,beanName,"Around", expression);
                                 }
                             }
                         }
@@ -248,7 +200,6 @@ public class ZhouyuApplicationContext {
                         } else {
                             beanDefinition.setScope("singleton");
                         }
-                        System.out.println("成功将bean：" + beanName + "加入到definitionMap中, 此时beanDefinition为："+beanDefinition.getClazz());
                         beanDefinitionMap.put(beanName, beanDefinition);
 
                     }
@@ -258,6 +209,25 @@ public class ZhouyuApplicationContext {
         }
     }
 
+    public void handleAdvices(Method method, String className, String beanName, String type, String expression){
+        // 查看是否有切面相关的环绕通知
+
+        // 分裂表达式获取该通知适用的所有方法
+        String[] joinPoints = expression.split(";");
+
+        for (String joinPointClass : joinPoints) {
+            String[] affectedLevels = joinPointClass.split("\\.");
+            String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
+            String affectedMethodName = affectedLevels[affectedLevels.length-1];
+            AdviceInfo ai = new AdviceInfo(className,type, beanName, method.getName(), affectedMethodName);
+            if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
+                joinPointMap.put(affectedBeanName, new ArrayList<>());
+            }
+            joinPointMap.get(affectedBeanName).add(ai);
+        }
+
+
+    }
     public static String lowercaseFirstLetter(String input) {
         if (input == null || input.isEmpty()) {
             return input;
