@@ -2,7 +2,7 @@
 ![img_1.png](img_1.png)
 # spring的两种容器
 
-## 使用方式（spring如何获取需要注册bean的类）
+## 使用方式（spring如何获取需要注册bean的类）!!!
 
 ```java
    public static void main(String[] args) {
