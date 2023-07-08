@@ -15,7 +15,7 @@ public class Test {
 //        System.out.println(applicationContext.getBean("userService"));
 
         UserService userService = (UserService) applicationContext.getBean("userServiceImpl");
-//        userService.test();
+        userService.test();
         userService.before1();
         userService.before2();
         userService.after();

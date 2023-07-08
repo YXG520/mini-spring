@@ -16,12 +16,7 @@ public class AdviceInfo {
     // 作用点,jointPoint
     private String affectedMethod;
 
-    public AdviceInfo(String type, String aspectBeanName, String adviceName, String affectedMethod) {
-        this.type = type;
-        this.aspectBeanName = aspectBeanName;
-        this.adviceName = adviceName;
-        this.affectedMethod = affectedMethod;
-    }
+
     public AdviceInfo(String fullPathName, String type, String aspectBeanName, String adviceName, String affectedMethod) {
         this.fullPathName = fullPathName;
         this.type = type;

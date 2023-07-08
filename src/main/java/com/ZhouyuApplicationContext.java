@@ -64,16 +64,20 @@ public class ZhouyuApplicationContext {
         try {
             Object instance = clazz.getDeclaredConstructor().newInstance();
 
-            // 依赖注入
+            // 属性/依赖注入
             for (Field declaredField : clazz.getDeclaredFields()) {
                 if (declaredField.isAnnotationPresent(Autowired.class)) {
                     System.out.println("declaredField.getName(): " + declaredField.getName()
-                            + ", 探测获取bean："+  beanDefinitionMap.get(declaredField.getName()));
+                            + ", 探测获取beanDefinition："+  beanDefinitionMap.get(declaredField.getName()));
                     Object bean = getBean(declaredField.getName());
-                    System.out.println(", bean是否为空：" + (bean == null));
+                    System.out.println("bean是否为空：" + (bean == null));
 
+                    // 创建bean
                     if (bean == null) {
-                        throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
+                        System.out.println("没有获取到第三方bean, beanName: "+ declaredField.getName() + ", 创建bean");
+                        ZhouyuApplicationContext zac = new ZhouyuApplicationContext();
+                        bean = zac.createBean(beanName, beanDefinitionMap.get(declaredField.getName()));
+                        // throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
                     }
                     declaredField.setAccessible(true);
                     declaredField.set(instance, bean);
@@ -179,8 +183,9 @@ public class ZhouyuApplicationContext {
                                         System.out.println("joinPointClassPath:"+joinPointClass);
                                         String[] affectedLevels = joinPointClass.split("\\.");
                                         System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
+                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的方法
+                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
+                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedMethodName);
                                         if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
                                             joinPointMap.put(affectedBeanName, new ArrayList<>());
                                         }
@@ -200,7 +205,10 @@ public class ZhouyuApplicationContext {
                                         String[] affectedLevels = joinPointClass.split("\\.");
                                         System.out.println("length: "+affectedLevels.length);
                                         String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-                                        AdviceInfo ai = new AdviceInfo("After", beanName, method.getName(), affectedBeanName);
+//                                        AdviceInfo ai = new Advico("After", beanName, method.getName(), affectedBeanName);eInf
+//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
+                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
+                                        AdviceInfo ai = new AdviceInfo(className,"After", beanName, method.getName(), affectedMethodName);
                                         if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
                                             joinPointMap.put(affectedBeanName, new ArrayList<>());
                                         }
@@ -221,7 +229,9 @@ public class ZhouyuApplicationContext {
                                         System.out.println("length: "+affectedLevels.length);
                                         String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
                                         System.out.println("affectedBeanName: "+affectedBeanName);
-                                        AdviceInfo ai = new AdviceInfo("Around", beanName, method.getName(), affectedBeanName);
+//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
+                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
+                                        AdviceInfo ai = new AdviceInfo(className,"Around", beanName, method.getName(), affectedMethodName);
                                         if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
                                             joinPointMap.put(affectedBeanName, new ArrayList<>());
                                         }

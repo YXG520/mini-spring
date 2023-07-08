@@ -9,8 +9,8 @@ import com.spring.InitializingBean;
 //@Scope("prototype")
 public class UserServiceImpl implements BeanNameAware, InitializingBean, UserService {
 
-//    @Autowired
-//    private OrderService orderService;
+    @Autowired
+    private OrderService orderService;
 
     // 获取当前bean的名字
     private String beanName;
@@ -40,27 +40,34 @@ public class UserServiceImpl implements BeanNameAware, InitializingBean, UserSer
 
     public void test() {
 //        System.out.println(orderService);
-        System.out.println(beanName);
-        System.out.println(name);
+//        System.out.println(beanName);
+//        System.out.println(name);
+        System.out.println("执行orderService:"+orderService);
     }
 
     @Override
     public void before1() {
-        System.out.println("执行与前置通知绑定的方法1");
+        System.out.println("execute before1");
+        System.out.println("-------------");
     }
 
     @Override
     public void before2() {
-        System.out.println("执行与前置通知绑定的方法2");
+        System.out.println("execute before2");
+        System.out.println("-------------");
+
     }
 
     @Override
     public void after() {
         System.out.println("执行与后置通知绑定的方法");
+        System.out.println("-------------");
+
     }
 
     @Override
     public void around() {
         System.out.println("执行与环绕通知绑定的方法");
+        System.out.println("-------------");
     }
 }

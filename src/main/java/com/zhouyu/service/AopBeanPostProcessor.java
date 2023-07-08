@@ -39,21 +39,28 @@ public class AopBeanPostProcessor implements BeanPostProcessor {
                     (proxy, method, args) -> {
 
                         // 在目标方法调用前执行逻辑
-                        System.out.println("Before method execution， add before advice");
+//                        System.out.println("Before method execution， add before advice");
 
                         for (AdviceInfo adviceInfo : adviceInfos) {
                             if (adviceInfo.getType().equals("Before") || adviceInfo.getType().equals("Around")) {
-                                invokeAopMethod(adviceInfo);
+//                                System.out.println("adviceInfo.getAffectedMethod():"+adviceInfo.getAffectedMethod() + ", method.getName()："+method.getName());
+                                if (adviceInfo.getAffectedMethod().equals(method.getName())) {
+                                    // 如果方法名和保存的方法名匹配，则可以执行通知
+                                    invokeAopMethod(adviceInfo);
+                                }
                             }
                         }
                         // 调用目标方法
                         Object result = method.invoke(bean, args);
 
                         // 在目标方法调用后执行逻辑
-                        System.out.println("After method execution, add after advice");
+//                        System.out.println("After method execution, add after advice");
                         for (AdviceInfo adviceInfo : adviceInfos) {
                             if (adviceInfo.getType().equals("After") || adviceInfo.getType().equals("Around")) {
-                                invokeAopMethod(adviceInfo);
+                                if (adviceInfo.getAffectedMethod().equals(method.getName())) {
+                                    // 如果方法名和保存的方法名匹配，则可以执行通知
+                                    invokeAopMethod(adviceInfo);
+                                }
                             }
                         }
                         return result;
