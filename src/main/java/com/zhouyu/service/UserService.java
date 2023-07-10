@@ -11,5 +11,10 @@ public interface UserService {
 
     void around();
 
+    void testBeanName();
+
+    void testAfterPropertiesSet();
+
+    void testDI();
 
 }
