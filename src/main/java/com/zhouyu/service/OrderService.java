@@ -7,5 +7,8 @@ import com.spring.Scope;
 //@Scope("prototype")
 public class OrderService {
 
+    public void provideOrderService() {
+        System.out.println("I am orderService...");
+    }
 
 }

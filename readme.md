@@ -682,8 +682,110 @@ public class MyService {
 }
 ```
 
-# 9 疑问点
-## 9.1 
+# 9 spring循环依赖
+## 9.1 出现循环依赖的几种场景
+
+1. 构造器注入：这是最复杂的一种，因为构造器注入的循环依赖无法被 Spring 容器处理，会导致创建 Bean 失败。
+
+```java
+@Component
+public class A {
+    private B b;
+
+    public A(B b) {
+        this.b = b;
+    }
+}
+
+@Component
+public class B {
+    private A a;
+
+    public B(A a) {
+        this.a = a;
+    }
+}
+```
+
+2. Setter注入：Spring 容器能够处理这种情况下的循环依赖。
+
+```java
+@Component
+public class A {
+    private B b;
+
+    @Autowired
+    public void setB(B b) {
+        this.b = b;
+    }
+}
+
+@Component
+public class B {
+    private A a;
+
+    @Autowired
+    public void setA(A a) {
+        this.a = a;
+    }
+}
+```
+3. 属性注入
+```java
+@Component
+public class A {
+    @Autowired
+    private B b;
+}
+
+@Component
+public class B {
+    @Autowired
+    private A a;
+}
+```
+
+4. Prototype范围的循环依赖：对于非 Singleton Bean（如 Prototype Bean），Spring 容器不会尝试解决循环依赖。尝试创建这样的 Bean 会导致 BeanCurrentlyInCreationException 异常。
+
+```java
+@Configuration
+public class Config {
+    @Bean
+    @Scope("prototype")
+    public A a() {
+        return new A();
+    }
+
+    @Bean
+    @Scope("prototype")
+    public B b() {
+        return new B();
+    }
+}
+
+public class A {
+    @Autowired
+    private B b;
+}
+
+public class B {
+    @Autowired
+    private A a;
+}
+```
+请注意，这些代码示例的目的是为了解释如何在 Spring 中创建可能的循环依赖，并不推荐在实际应用中创建循环依赖，因为这可能导致代码难以理解和维护。
+
+5 属性中注入自己也是一种循环依赖
+```java
+@Component
+public class A {
+    @Autowired
+    private A a;
+}
+```
+
+# 10 疑问点
+## 10.1 
 
 ```java
 // 方法一：
@@ -740,3 +842,4 @@ public class BeanDefinition {
 
 ## 9.2为什么需要二级缓存earlyReferenceMap？
 当对象A有一个类型为B的属性时，这个时候A先生成
+
