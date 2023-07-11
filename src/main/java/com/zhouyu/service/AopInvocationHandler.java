@@ -32,20 +32,12 @@ public class AopInvocationHandler implements InvocationHandler {
         this.beanDefinitionMap = beanDefinitionMap;
     }
 
-    public void printAdviceList(List<AdviceInfo> adviceInfos) {
-        System.out.println("打印切面：：");
-        for (AdviceInfo adviceInfo : adviceInfos) {
-            System.out.println(adviceInfo); // 假设AdviceInfo类已经实现了toString()方法
-        }
-    }
-
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 
 
         for (AdviceInfo adviceInfo : adviceInfos) {
             if (adviceInfo.getType().equals("Before") || adviceInfo.getType().equals("Around")) {
-//                System.out.println("adviceInfo.getType()： " + adviceInfo.getType() +", adviceInfo.getAffectedMethod():"+adviceInfo.getAffectedMethod() + ", method.getName()："+method.getName());
                 if (adviceInfo.getAffectedMethod().equals(method.getName())) {
                     // 如果方法名和保存的方法名匹配，则可以执行通知
                     invokeAopMethod(adviceInfo);
@@ -56,7 +48,6 @@ public class AopInvocationHandler implements InvocationHandler {
         Object result = method.invoke(originalObject, args);
 
         // 在目标方法调用后执行逻辑
-//                        System.out.println("After method execution, add after advice");
         for (AdviceInfo adviceInfo : adviceInfos) {
             if (adviceInfo.getType().equals("After") || adviceInfo.getType().equals("Around")) {
                 System.out.println("adviceInfo.getAffectedMethod():"+adviceInfo.getAffectedMethod() + ", method.getName()："+method.getName());
