@@ -832,6 +832,452 @@ public class A {
 > 
 > 7 返回AS的代理对象，此时单例池中存储的也是AS和BS的代理对象
 
+## 9.4 明明一级缓存就能解决带AOP的循环依赖问题，为什么还需要三级缓存呢？
+
+spring让getEarlyBeanReference成为了创建bean时必会被调用的核心方法，
+而原本此处只是为了循环依赖时先给其他bean赋值！倘若我们压根都没有循环依赖，
+bean本身的创建流程就应该是先new（一般是通过反射创建）一个，再装配初始化，
+最后放入实例缓存，此种设计就成了本末倒置！那怎么调整呢？
+
+为什么需要三级缓存的bean本质：
+**让getEarlyBeanReference延迟触发，只在有循环依赖时被引用的bean需要赋值当前bean时才触发！
+所以就有了对象工厂ObjectFactory，也就有了第三级缓存。**
+
+那为什么需要"让getEarlyBeanReference延迟触发", 这可能包含了"延迟加载"的思想，即不是立即创建代理类，
+而是先创建“能够帮助创建代理类”的工厂。
+
+可以理解为spring使用三级缓存时为了延迟创建真正的bean吗？
+
+![img_6.png](img_6.png)
+
+
+
+# 10 spring创建对象涉及到的设计模式
+![img_11.png](img_11.png)
+
+## 10.1 单例模式
+![img_8.png](img_8.png)
+
+## 10.2 原型模式
+Spring也可以将Bean的scope配置为prototype，这时每次获取Bean时都会创建新的实例，体现了原型模式。
+
+## 10.3 代理模式
+Spring AOP的实现使用了代理模式，生成目标对象的代理对象，从而实现各种面向切面的功能，如事务管理，日志记录等。
+在本项目中，这种设计模式体现在createProxy方法中。
+
+## 10.4 工厂方法模式
+这里的ObjectFactory如何体现工厂方法的设计模式呢？
+![img_7.png](img_7.png)
+
+下面是工厂方法模式一般性demo:
+重点看第一块，第二块代码是具体被创建的对象：
+```java
+public interface AnimalFactory {
+    Animal createAnimal();
+}
+
+public class DogFactory implements AnimalFactory {
+    public Dog createAnimal() {
+        return new Dog();
+    }
+}
+
+public class CatFactory implements AnimalFactory {
+    public Cat createAnimal() {
+        return new Cat();
+    }
+}
+```
+
+```java
+public interface Animal {
+    void eat();
+    void sound();
+}
+
+public class Cat implements Animal {
+    @Override
+    public void eat() {
+        System.out.println("The cat is eating");
+    }
+
+    @Override
+    public void sound() {
+        System.out.println("The cat says: Meow");
+    }
+}
+
+public class Dog implements Animal {
+    @Override
+    public void eat() {
+        System.out.println("The dog is eating");
+    }
+
+    @Override
+    public void sound() {
+        System.out.println("The dog says: Woof");
+    }
+}
+
+```
+
+
+## 10.5 策略模式
+Spring的Resource接口及其实现类就是策略模式的应用，对于不同的资源路径，Spring有不同的策略来处理
+![img_9.png](img_9.png)
+
+
+## 10.6 模板方法模式（因为jdbcTemplate通常会被加载到spring容器中）
+Spring中的JdbcTemplate，HibernateTemplate等都使用了模板方法模式。
+这种模式在基础类中定义了一组算法的框架，将一些步骤延迟到子类/实现类中实现。
+这允许子类/实现类在不改变算法结构的情况下，重新定义算法的某些特定步骤
+
+JdbcTemplate 是 Spring 中对 JDBC 进行封装，提供一种相对简便的使用方式。其使用了模板方法设计模式，即在父类中定义处理流程的框架，具体步骤由子类实现。
+
+1 以下是一个例子：
+
+```java
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+
+import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public class EmployeeDao {
+    private JdbcTemplate jdbcTemplate;
+
+    public EmployeeDao(DataSource dataSource) {
+        jdbcTemplate = new JdbcTemplate(dataSource);
+    }
+
+    public Employee getEmployeeById(int id) {
+        String query = "SELECT * FROM employees WHERE id = ?";
+        Employee employee = jdbcTemplate.queryForObject(query, new RowMapper<Employee>() {
+            @Override
+            public Employee mapRow(ResultSet rs, int rowNum) throws SQLException {
+                Employee emp = new Employee();
+                emp.setId(rs.getInt("id"));
+                emp.setName(rs.getString("name"));
+                emp.setAge(rs.getInt("age"));
+                return emp;
+            }
+        }, id);
+        return employee;
+    }
+}
+```
+
+这个例子中，`queryForObject` 是 JdbcTemplate 的一个模板方法，它处理了创建连接，执行查询，处理异常，关闭连接等步骤。而 `RowMapper` 中的 `mapRow` 方法是一个回调方法，它允许我们自定义如何从 ResultSet 中获取数据。这是一个典型的模板方法设计模式的例子，其中模板方法是 `queryForObject`，回调方法是 `mapRow`。
+
+
+2 但是这里的子类在哪里体现？
+
+> 我的解释可能引起了一些混淆。在这个上下文中，JdbcTemplate使用了模板方法设计模式，但它并不依赖于使用子类来实现这种模式。
+模板方法设计模式通常涉及到一个基础类（或接口）定义了算法或工作流程的骨架，然后允许子类或实现类提供特定步骤的实现。然而，在这个例子中，JdbcTemplate将这种模式与回调函数模式结合起来使用，允许用户提供一个实现了特定接口（在本例中是RowMapper）的对象，该对象提供了算法某部分步骤的实现。
+因此，"子类"的体现不是在类的继承层次结构中，而是在通过回调函数提供行为的方式中。在这种情况下，RowMapper就是这样的"子类"，它不是通过继承来体现的，而是通过实现特定接口来体现的。用户提供的匿名类或者lambda表达式等，实际上在某种程度上类似于在子类中实现模板方法的某些步骤。
+
+3 如果不实现基础类，那会报错吗?
+
+![img_10.png](img_10.png)
+
+## 10.7 spring中抽象工厂模式
+
+Spring使用抽象工厂模式通过BeanFactory或者ApplicationContext来创建对象（两个不同的抽象工厂）。
+这些工厂在创建对象时会考虑配置文件中的各种配置信息（比如Bean的作用域，生命周期回调等）。
+
+### 10.7.1 抽象工厂模式和工厂方法模式的区别
+![img_16.png](img_16.png)
+
+### 10.7.2 ApplicationContext是一个工厂方法接口还是抽象工厂接口呢
+![img_14.png](img_14.png)
+
+### 10.7.3 ApplicationContext 有哪些实现类（或子工厂），并且介绍一下作用
+
+![img_15.png](img_15.png)
+
+### 10.7.4 ApplicationContext是不是一个多级工厂？
+![img_18.png](img_18.png)
+
+重点是：ApplicationContext的实现类本身也是一个抽象工厂，为什么这么说？
+
+> 因为spring的三级缓存Map中，每一个value都是一个工厂方法，对应一类业务接口（每一个业务接口有多个是西安类）
+
+### 10.7.5 如果ApplicationContext是抽象工厂，难道ApplicationContext不应该是一个抽象类吗？
+![img_17.png](img_17.png)
+
+## 10.8 下面是整个spring框架涉及到的设计模式：
+
+![img_12.png](img_12.png)
+
+## 10.9 装饰器模式（Decorator Pattern）
+Spring使用装饰器模式对某些类（如InputStream）在不改变原有结构的情况下添加额外的功能。
+
+下面详细介绍一下，并且给一个例子：
+
+![img_13.png](img_13.png)
+
+## 10.10 适配器模式
+
+### 10.10.1 适配器的主要作用
+适配器模式（Adapter Pattern）是一种结构型设计模式，主要用于使得原本不兼容的接口可以相互协作。
+
+### 10.10.2 下面是一个解决兼容问题的具体例子：
+
+当然，我们可以通过一个简单的例子来解释一下适配器模式在实际代码中的应用。在这个例子中，我们将创建一个MediaPlayer接口和一个实现了MediaPlayer接口的AudioPlayer类。实体类VlcPlayer和Mp4Player实现了一个更高级的接口AdvancedMediaPlayer。Adapter类MediaAdapter是实现了MediaPlayer接口的适配器类。
+
+首先，我们来创建接口：
+
+```java
+// MediaPlayer.java
+public interface MediaPlayer {
+    void play(String audioType, String fileName);
+}
+
+// AdvancedMediaPlayer.java
+public interface AdvancedMediaPlayer {   
+    void playVlc(String fileName);
+    void playMp4(String fileName);
+}
+```
+
+然后，创建实现了 AdvancedMediaPlayer 接口的实体类。
+
+```java
+// VlcPlayer.java
+public class VlcPlayer implements AdvancedMediaPlayer {
+    @Override
+    public void playVlc(String fileName) {
+        System.out.println("Playing vlc file. Name: "+ fileName);      
+    }
+
+    @Override
+    public void playMp4(String fileName) {
+        //什么也不做
+    }
+}
+
+// Mp4Player.java
+public class Mp4Player implements AdvancedMediaPlayer {
+    @Override
+    public void playVlc(String fileName) {
+        //什么也不做
+    }
+
+    @Override
+    public void playMp4(String fileName) {
+        System.out.println("Playing mp4 file. Name: "+ fileName);      
+    }
+}
+```
+
+然后，我们创建实现了 MediaPlayer 接口的适配器类 MediaAdapter。
+
+```java
+// MediaAdapter.java
+public class MediaAdapter implements MediaPlayer {
+
+    AdvancedMediaPlayer advancedMusicPlayer;
+
+    public MediaAdapter(String audioType){
+
+        if(audioType.equalsIgnoreCase("vlc") ){
+            advancedMusicPlayer = new VlcPlayer();       
+
+        }else if (audioType.equalsIgnoreCase("mp4")){
+            advancedMusicPlayer = new Mp4Player();
+        }   
+    }
+
+    @Override
+    public void play(String audioType, String fileName) {
+
+        if(audioType.equalsIgnoreCase("vlc")){
+            advancedMusicPlayer.playVlc(fileName);
+        }
+        else if(audioType.equalsIgnoreCase("mp4")){
+            advancedMusicPlayer.playMp4(fileName);
+        }
+    }
+}
+```
+
+最后，创建实现了 MediaPlayer 接口的 AudioPlayer 类，AudioPlayer 类使用 MediaAdapter 传递所需的音频类型。
+
+```java
+// AudioPlayer.java
+public class AudioPlayer implements MediaPlayer {
+    MediaAdapter mediaAdapter; 
+
+    @Override
+    public void play(String audioType, String fileName) {      
+
+        //播放 mp3 音乐文件的内置支持
+        if(audioType.equalsIgnoreCase("mp3")){
+            System.out.println("Playing mp3 file. Name: " + fileName);            
+        } 
+        //mediaAdapter 提供了播放其他文件格式的支持
+        else if(audioType.equalsIgnoreCase("vlc") || audioType.equalsIgnoreCase("mp4")){
+            mediaAdapter = new MediaAdapter(audioType);
+            mediaAdapter.play(audioType, fileName);
+        }
+        else{
+            System.out.println("Invalid media. " + audioType + " format not supported");
+        }
+    }   
+}
+```
+
+通过上述代码，我们成功实现了适配器模式，即使VlcPlayer和Mp4Player并不实现MediaPlayer接口，但是通过MediaAdapter这个适配器，AudioPlayer仍然可以调用VlcPlayer和Mp4Player的功能，达到适配的效果。
+
+
+## 10.11 spring组合模式
+
+组合模式（Composite Pattern）在Spring框架中的应用主要是在Spring组件（Bean）的组合和组装上。举个例子，我们可以在一个Spring应用中将多个单独的Bean组合在一起，形成一个更大的组件（Composite）。这个更大的组件可能是一个服务类，它可能由其他多个服务、DAO或其他组件组成。
+
+首先，我们需要创建一个基本的组件接口。在Spring中，我们可以将其视为一个基本的Spring Bean：
+
+```java
+public interface Component {
+    void operation();
+}
+```
+
+然后，我们可以创建基本组件和组合组件：
+
+```java
+// Leaf.java
+public class Leaf implements Component {
+    private String name;
+
+    public Leaf(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public void operation() {
+        System.out.println("Leaf " + name + " is operated.");
+    }
+}
+
+// Composite.java
+public class Composite implements Component {
+    private List<Component> childComponents = new ArrayList<>();
+
+    public void add(Component component) {
+        childComponents.add(component);
+    }
+
+    public void remove(Component component) {
+        childComponents.remove(component);
+    }
+
+    @Override
+    public void operation() {
+        for (Component child : childComponents) {
+            child.operation();
+        }
+    }
+}
+```
+
+在Spring中，你可以像下面这样将这些Bean组合起来：
+
+```java
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public Leaf leaf1() {
+        return new Leaf("leaf1");
+    }
+
+    @Bean
+    public Leaf leaf2() {
+        return new Leaf("leaf2");
+    }
+
+    @Bean
+    public Composite composite() {
+        Composite composite = new Composite();
+        composite.add(leaf1());
+        composite.add(leaf2());
+        return composite;
+    }
+}
+```
+
+在上述的配置中，`composite` Bean包含了`leaf1`和`leaf2`。这就是在Spring中使用组合模式的一个简单示例。
+
+## 10.12 spring的命令模式
+
+![img_19.png](img_19.png)
+
+### 10.12.2 这就是命令模式的基本思想：将一个请求封装成一个对象，从而使你可用不同的请求对客户进行参数化。举一个与C/S请求相关但是使用到命令模式的case
+假设你正在构建一个网页应用，你有一个“前端请求处理器”，这个处理器接收到前端发送的各种类型的请求并相应地处理它们。在这个场景下，每一种请求可以被看作是一个命令。
+
+首先，定义一个表示命令的接口：
+
+```java
+public interface Command {
+    void execute();
+}
+```
+
+然后，你可以针对每一种请求创建一个实现了Command接口的类：
+
+```java
+public class LoadPageCommand implements Command {
+    private PageLoader pageLoader;
+
+    public LoadPageCommand(PageLoader pageLoader) {
+        this.pageLoader = pageLoader;
+    }
+
+    @Override
+    public void execute() {
+        pageLoader.load();
+    }
+}
+
+public class SubmitFormCommand implements Command {
+    private FormHandler formHandler;
+
+    public SubmitFormCommand(FormHandler formHandler) {
+        this.formHandler = formHandler;
+    }
+
+    @Override
+    public void execute() {
+        formHandler.submit();
+    }
+}
+```
+
+在上面的例子中，`LoadPageCommand` 和 `SubmitFormCommand` 都是具体的命令，它们封装了各自的请求处理逻辑。
+
+最后，你可以在前端请求处理器中使用这些命令：
+
+```java
+public class FrontEndRequestHandler {
+    private Map<String, Command> commands;
+
+    public FrontEndRequestHandler(Map<String, Command> commands) {
+        this.commands = commands;
+    }
+
+    public void handleRequest(String request) {
+        Command command = commands.get(request);
+        if (command != null) {
+            command.execute();
+        } else {
+            // Handle invalid request
+        }
+    }
+}
+```
+
+这样，你就使用命令模式将各种请求处理逻辑封装成了对象，使得前端请求处理器能以统一的方式处理各种类型的请求。
 
 
 # 10 疑问点
