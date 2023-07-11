@@ -47,9 +47,9 @@ public class Test {
         orderService.callSelfService();
 
         System.out.println("------------------------------测试点：使用一级缓存解决带AOP的bean之间的循环依赖---------------------------------");
-
         BoyService boyServiceImpl = (BoyService) applicationContext.getBean("boyServiceImpl");
         boyServiceImpl.sayHello2Girls();
+
         GirlService girlServiceImpl = (GirlService) applicationContext.getBean("girlServiceImpl");
         girlServiceImpl.sayHello2Boys();
 

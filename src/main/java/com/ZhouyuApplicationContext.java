@@ -69,25 +69,27 @@ public class ZhouyuApplicationContext {
         try {
             // 创建实例
             Object instance = clazz.getDeclaredConstructor().newInstance();
-
+            Object proxyInstance = null;
             // 决定是否需要提前创建代理对象
 //            if (beanDefinition.isAspect()) {
             if (adviceInfoMap.containsKey(beanName)) {
-                // 如果一个bean需要代理对象，可以提前创建带AOP，带事务的代理对象，但是不应该提前执行初始化操作
-                instance = createAopProxy(instance, adviceInfoMap.get(beanName));
+                // 如果一个bean需要代理对象，可以提前创建带AOP，带事务的代理对象
+                proxyInstance = createAopProxy(instance, adviceInfoMap.get(beanName));
             }
+            if (proxyInstance == null) {
+                proxyInstance = instance;
+            }
+            // 立即加入到一级缓存中, 因为有可能不需要创建AOP，则此时只用加入原来的对象到单例池中
+            singletonObjects.put(beanName, proxyInstance);
 
-            // 立即加入到一级缓存中
-            singletonObjects.put(beanName, instance);
-
-            // 属性注入
+            // 给原来的对象进行属性注入
             populateBean(clazz,instance);
 
             // 初始化
             initializeBean(instance, beanName);
 
             System.out.println("返回instance: "+ beanName);
-            return instance;
+            return proxyInstance;
         } catch (InstantiationException e) {
             e.printStackTrace();
         } catch (IllegalAccessException e) {
@@ -169,33 +171,17 @@ public class ZhouyuApplicationContext {
     }
 
     // 属性注入
-    public void populateBean(Class clazz, Object proxy) throws IllegalAccessException {
+    public void populateBean(Class clazz, Object instance) throws IllegalAccessException {
         // 对原来的对象进行属性/依赖注入
-
-        Object instance = proxy;
-        // 如果因为AOP等，已经生成了代理对象，则获取被代理的对象的地址
-        if (Proxy.isProxyClass(proxy.getClass())) {
-            System.out.println("The object is a JDK dynamic proxy.");
-            instance = getOriginalObjectFromProxy(proxy);
-
-        }
-
-        // 先获取被代理的对象的地址，这样修改被代理对象，也不会影响代理对象
 
         for (Field declaredField : clazz.getDeclaredFields()) {
             if (declaredField.isAnnotationPresent(Autowired.class)) {
-                System.out.println("declaredField.getName(): " + declaredField.getName()
-                        + ", 探测获取beanDefinition："+  beanDefinitionMap.get(declaredField.getName()));
                 Object bean = getBean(declaredField.getName());
-                System.out.println("bean是否为空：" + (bean == null));
 
                 // 创建bean
                 if (bean == null) {
-                    System.out.println("没有获取到第三方bean, beanName: "+ declaredField.getName() + ", 创建bean");
                     ZhouyuApplicationContext zac = new ZhouyuApplicationContext();
                     bean = zac.createBean(declaredField.getName(), beanDefinitionMap.get(declaredField.getName()));
-//                        if ()
-                    // throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
                 }
                 declaredField.setAccessible(true);
                 declaredField.set(instance, bean);
@@ -277,6 +263,7 @@ public class ZhouyuApplicationContext {
                         // 处理切面类
                         handleAspectClass(className, clazz, beanName);
 
+                        // 处理元数据
                         BeanDefinition beanDefinition = new BeanDefinition();
                         beanDefinition.setClazz(clazz);
                         if (clazz.isAnnotationPresent(Scope.class)) {
@@ -322,8 +309,8 @@ public class ZhouyuApplicationContext {
         }
     }
 
+    // 使用map存储所有“通知”
     private void saveAdvices(String className, String beanName, Method method, String expression, String adviceType) {
-
 
         // 分裂表达式获取该通知适用的所有方法
         String[] joinPoints = expression.split(";");

@@ -20,7 +20,7 @@ public class AopBeanPostProcessor implements BeanPostProcessor {
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
         Object proxyObj = bean;
-        // 看一下是否需要创建切面
+        // 看一下是否需要创建切面，如果不需要创建切面则返回原来的对象
         if (adviceInfoMap.containsKey(beanName)) {
             // 判断这个切面是否因为循环依赖而提前被创建
             if (singletonObjects.containsKey(beanName)) {

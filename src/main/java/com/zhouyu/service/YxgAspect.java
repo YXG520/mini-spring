@@ -22,8 +22,8 @@ public class YxgAspect {
     }
 
     @Before("com.zhouyu.service.BoyServiceImpl.sayHello2Girls;com.zhouyu.service.GirlServiceImpl.sayHello2Boys")
-    public void beforeForBoys() {
-        System.out.println("前置通知：before advice for Boys object executes successfully!!!");
+    public void beforeForChildren() {
+        System.out.println("前置通知：before advice for Children object executes successfully!!!");
     }
 
 //    @Before("com.zhouyu.service.BoyServiceImpl.sayHello2Girls")
