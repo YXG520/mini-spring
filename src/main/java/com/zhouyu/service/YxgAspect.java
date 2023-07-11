@@ -26,10 +26,10 @@ public class YxgAspect {
         System.out.println("前置通知：before advice for Children object executes successfully!!!");
     }
 
-//    @Before("com.zhouyu.service.BoyServiceImpl.sayHello2Girls")
-//    public void beforeForGirls() {
-//        System.out.println("before advice for children object executes successfully!!!");
-//    }
+    @After("com.zhouyu.service.BoyServiceImpl.sayHello2Girls;com.zhouyu.service.GirlServiceImpl.sayHello2Boys")
+    public void afterForChildren() {
+        System.out.println("后置通知!!!");
+    }
 
     @Around("com.zhouyu.service.GirlServiceImpl.sayHello2Boys")
     public void aroundForGirlS() {
