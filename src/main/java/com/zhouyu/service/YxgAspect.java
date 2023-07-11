@@ -21,6 +21,18 @@ public class YxgAspect {
         System.out.println("环绕通知执行成功");
     }
 
+    @Before("com.zhouyu.service.BoyServiceImpl.sayHello2Girls;com.zhouyu.service.GirlServiceImpl.sayHello2Boys")
+    public void beforeForBoys() {
+        System.out.println("前置通知：before advice for Boys object executes successfully!!!");
+    }
 
+//    @Before("com.zhouyu.service.BoyServiceImpl.sayHello2Girls")
+//    public void beforeForGirls() {
+//        System.out.println("before advice for children object executes successfully!!!");
+//    }
 
+    @Around("com.zhouyu.service.GirlServiceImpl.sayHello2Boys")
+    public void aroundForGirlS() {
+        System.out.println("环绕通知：execute around advice successfully!!!");
+    }
 }

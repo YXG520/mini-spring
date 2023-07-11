@@ -1,7 +1,7 @@
 package com.zhouyu;
 
 import com.ZhouyuApplicationContext;
-import com.zhouyu.service.UserService;
+import com.zhouyu.service.*;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -30,9 +30,29 @@ public class Test {
         System.out.println("----------------------------测试InitializingBean接口的实现-------------------------------");
         userService.testAfterPropertiesSet();
 
+        System.out.println("------------------------------测试AOP的实现---------------------------------");
+
         userService.before1();
         userService.before2();
         userService.after();
         userService.around();
+
+        System.out.println("------------------------------测试点：使用一级缓存解决非AOP bean之间的循环依赖---------------------------------");
+        // 如果两个都调用业务互相调用成功，就说明循环依赖解决了
+        ProductService productService = (ProductService) applicationContext.getBean("productService");
+        OrderService orderService = (OrderService) applicationContext.getBean("orderService");
+        orderService.callProductService();
+        productService.callOrderService();
+
+        orderService.callSelfService();
+
+        System.out.println("------------------------------测试点：使用一级缓存解决带AOP的bean之间的循环依赖---------------------------------");
+
+        BoyService boyServiceImpl = (BoyService) applicationContext.getBean("boyServiceImpl");
+        boyServiceImpl.sayHello2Girls();
+        GirlService girlServiceImpl = (GirlService) applicationContext.getBean("girlServiceImpl");
+        girlServiceImpl.sayHello2Boys();
+
+
     }
 }

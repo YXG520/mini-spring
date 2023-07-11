@@ -19,6 +19,14 @@
             <version>1.18.20</version> <!-- 请检查最新版本 -->
             <scope>provided</scope>
         </dependency>
+
+            <!-- CGLIB -->
+            <dependency>
+                <groupId>cglib</groupId>
+                <artifactId>cglib</artifactId>
+                <version>3.3.0</version>
+            </dependency>
+
     </dependencies>
 
 </project>

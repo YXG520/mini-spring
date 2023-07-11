@@ -2,13 +2,15 @@ package com;
 
 import com.pojo.AdviceInfo;
 import com.spring.*;
+import com.zhouyu.service.AopInvocationHandler;
 import com.zhouyu.service.OrderService;
+import net.sf.cglib.proxy.Enhancer;
+import net.sf.cglib.proxy.MethodInterceptor;
+import net.sf.cglib.proxy.MethodProxy;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,7 +27,10 @@ public class ZhouyuApplicationContext {
     public static ConcurrentHashMap<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
     public List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
-    public static Map<String, List<AdviceInfo>> joinPointMap = new ConcurrentHashMap<>();
+    public static Map<String, List<AdviceInfo>> adviceInfoMap = new ConcurrentHashMap<>();
+
+    // 创建一个map用于确认是否提前完成了beanPostProcessor接口的实现，即是否提前创建了代理对象
+    public static Map<String, Boolean> isFinishBPP = new HashMap<>();
 
     public ZhouyuApplicationContext() {
 
@@ -62,47 +67,25 @@ public class ZhouyuApplicationContext {
     public Object createBean(String beanName, BeanDefinition beanDefinition) {
         Class clazz = beanDefinition.getClazz();
         try {
+            // 创建实例
             Object instance = clazz.getDeclaredConstructor().newInstance();
 
-            // 属性/依赖注入
-            for (Field declaredField : clazz.getDeclaredFields()) {
-                if (declaredField.isAnnotationPresent(Autowired.class)) {
-                    System.out.println("declaredField.getName(): " + declaredField.getName()
-                            + ", 探测获取beanDefinition："+  beanDefinitionMap.get(declaredField.getName()));
-                    Object bean = getBean(declaredField.getName());
-                    System.out.println("bean是否为空：" + (bean == null));
-
-                    // 创建bean
-                    if (bean == null) {
-                        System.out.println("没有获取到第三方bean, beanName: "+ declaredField.getName() + ", 创建bean");
-                        ZhouyuApplicationContext zac = new ZhouyuApplicationContext();
-                        bean = zac.createBean(beanName, beanDefinitionMap.get(declaredField.getName()));
-                        // throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
-                    }
-                    declaredField.setAccessible(true);
-                    declaredField.set(instance, bean);
-                }
+            // 决定是否需要提前创建代理对象
+//            if (beanDefinition.isAspect()) {
+            if (adviceInfoMap.containsKey(beanName)) {
+                // 如果一个bean需要代理对象，可以提前创建带AOP，带事务的代理对象，但是不应该提前执行初始化操作
+                instance = createAopProxy(instance, adviceInfoMap.get(beanName));
             }
 
-            // Aware回调
-            // 完成beanNameAware的赋值
-            if (instance instanceof BeanNameAware) {
-                ((BeanNameAware)instance).setBeanName(beanName);
-            }
-            // BeanPostProcessor扩展机制，可以针对初始化前，初始化后，属性赋值后做一些其他操作
-            for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
-                instance = beanPostProcessor.postProcessBeforeInitialization(instance,beanName);
-            }
+            // 立即加入到一级缓存中
+            singletonObjects.put(beanName, instance);
+
+            // 属性注入
+            populateBean(clazz,instance);
 
             // 初始化
-            if (instance instanceof InitializingBean) {
-                ((InitializingBean)instance).afterPropertiesSet();
-            }
+            initializeBean(instance, beanName);
 
-            for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
-                instance = beanPostProcessor.postProcessAfterInitialization(instance,beanName);
-
-            }
             System.out.println("返回instance: "+ beanName);
             return instance;
         } catch (InstantiationException e) {
@@ -117,6 +100,130 @@ public class ZhouyuApplicationContext {
             e.printStackTrace();
         }
         return null;
+    }
+
+    // 创建代理对象
+    public Object createAopProxy(Object bean, List<AdviceInfo> adviceInfos) {
+        Object proxyObj = bean;
+        if (adviceInfos != null && adviceInfos.size() != 0) {
+            // jdk创建动态代理
+
+//            proxyObj = Proxy.newProxyInstance(
+//                    bean.getClass().getClassLoader(),
+//                    bean.getClass().getInterfaces(),
+//                    (proxy, method, args) -> {
+//                        // 在目标方法调用前执行逻辑
+////                        System.out.println("Before method execution， add before advice");
+//                        for (AdviceInfo adviceInfo : adviceInfos) {
+//                            if (adviceInfo.getType().equals("Before") || adviceInfo.getType().equals("Around")) {
+////                                System.out.println("adviceInfo.getAffectedMethod():"+adviceInfo.getAffectedMethod() + ", method.getName()："+method.getName());
+//                                if (adviceInfo.getAffectedMethod().equals(method.getName())) {
+//                                    // 如果方法名和保存的方法名匹配，则可以执行通知
+//                                    invokeAopMethod(adviceInfo);
+//                                }
+//                            }
+//                        }
+//                        // 调用目标方法
+//                        Object result = method.invoke(bean, args);
+//
+//                        // 在目标方法调用后执行逻辑
+////                        System.out.println("After method execution, add after advice");
+//                        for (AdviceInfo adviceInfo : adviceInfos) {
+//                            if (adviceInfo.getType().equals("After") || adviceInfo.getType().equals("Around")) {
+//                                if (adviceInfo.getAffectedMethod().equals(method.getName())) {
+//                                    // 如果方法名和保存的方法名匹配，则可以执行通知
+//                                    invokeAopMethod(adviceInfo);
+//                                }
+//                            }
+//                        }
+//                        return result;
+//                    });
+            proxyObj = Proxy.newProxyInstance(
+                    bean.getClass().getClassLoader(),
+                    bean.getClass().getInterfaces(), new AopInvocationHandler(bean,adviceInfos,singletonObjects,beanDefinitionMap));
+
+            System.out.println("返回了一个AOP代理对象....");
+        }
+        return proxyObj;
+
+    }
+
+
+
+    // 从代理对象中获取被代理的对象
+    public Object getOriginalObjectFromProxy(Object proxy) {
+        if(Proxy.isProxyClass(proxy.getClass())) {
+            InvocationHandler handler = Proxy.getInvocationHandler(proxy);
+            try {
+                Field field = handler.getClass().getDeclaredField("originalObject");
+                field.setAccessible(true);
+                Object originalObject = field.get(handler);
+                System.out.println("The original object: " + originalObject);
+                return originalObject;
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return null;
+    }
+
+    // 属性注入
+    public void populateBean(Class clazz, Object proxy) throws IllegalAccessException {
+        // 对原来的对象进行属性/依赖注入
+
+        Object instance = proxy;
+        // 如果因为AOP等，已经生成了代理对象，则获取被代理的对象的地址
+        if (Proxy.isProxyClass(proxy.getClass())) {
+            System.out.println("The object is a JDK dynamic proxy.");
+            instance = getOriginalObjectFromProxy(proxy);
+
+        }
+
+        // 先获取被代理的对象的地址，这样修改被代理对象，也不会影响代理对象
+
+        for (Field declaredField : clazz.getDeclaredFields()) {
+            if (declaredField.isAnnotationPresent(Autowired.class)) {
+                System.out.println("declaredField.getName(): " + declaredField.getName()
+                        + ", 探测获取beanDefinition："+  beanDefinitionMap.get(declaredField.getName()));
+                Object bean = getBean(declaredField.getName());
+                System.out.println("bean是否为空：" + (bean == null));
+
+                // 创建bean
+                if (bean == null) {
+                    System.out.println("没有获取到第三方bean, beanName: "+ declaredField.getName() + ", 创建bean");
+                    ZhouyuApplicationContext zac = new ZhouyuApplicationContext();
+                    bean = zac.createBean(declaredField.getName(), beanDefinitionMap.get(declaredField.getName()));
+//                        if ()
+                    // throw new RuntimeException("没有获取到第三方bean, beanName: "+ declaredField.getName()+", 此时beanDefinitionMap：" +beanDefinitionMap.toString());
+                }
+                declaredField.setAccessible(true);
+                declaredField.set(instance, bean);
+            }
+        }
+    }
+
+    // 因为beanPostProcessor，返回的有可能是代理对象
+    // 初始化：包括beanNameAware， InitializingBean接口回调，以及beanPostProcessor接口的前后置处理
+    public void initializeBean(Object instance, String beanName) throws Exception {
+        // Aware回调
+        // 完成beanNameAware的赋值
+        if (instance instanceof BeanNameAware) {
+            ((BeanNameAware)instance).setBeanName(beanName);
+        }
+        // BeanPostProcessor扩展机制，可以针对初始化前，初始化后，属性赋值后做一些其他操作
+        for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+            instance = beanPostProcessor.postProcessBeforeInitialization(instance,beanName);
+        }
+
+        // 初始化
+        if (instance instanceof InitializingBean) {
+            ((InitializingBean)instance).afterPropertiesSet();
+        }
+
+        for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+            instance = beanPostProcessor.postProcessAfterInitialization(instance,beanName);
+        }
     }
 
     /*
@@ -168,78 +275,8 @@ public class ZhouyuApplicationContext {
                         }
 
                         // 处理切面类
-                        if (clazz.isAnnotationPresent(Aspect.class)) {
-                            // 遍历切面类中的所有方法
-                            for (Method method:clazz.getDeclaredMethods()) {
-                                // 查看是否有切面前置通知
-                                if (method.isAnnotationPresent(Before.class)) {
-                                    // 切点 pointcut
-                                    String expression = method.getAnnotation(Before.class).value();
+                        handleAspectClass(className, clazz, beanName);
 
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的方法
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
-                                }
-                                // 查看是否有切面后置通知
-                                if (method.isAnnotationPresent(After.class)) {
-                                    // 切点 pointcut
-                                    String expression = method.getAnnotation(After.class).value();
-
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-//                                        AdviceInfo ai = new Advico("After", beanName, method.getName(), affectedBeanName);eInf
-//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"After", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
-                                }
-                                  // 查看是否有切面相关的环绕通知
-                                if (method.isAnnotationPresent(Around.class)) {
-                                    // 切点 pointcut
-                                    String expression = method.getAnnotation(Around.class).value();
-
-                                    // 分裂表达式获取该通知适用的所有方法
-                                    String[] joinPoints = expression.split(";");
-
-                                    for (String joinPointClass : joinPoints) {
-                                        System.out.println("joinPointClassPath:"+joinPointClass);
-                                        String[] affectedLevels = joinPointClass.split("\\.");
-                                        System.out.println("length: "+affectedLevels.length);
-                                        String affectedBeanName = affectedLevels[affectedLevels.length-2];//获取连接点的类
-                                        System.out.println("affectedBeanName: "+affectedBeanName);
-//                                        AdviceInfo ai = new AdviceInfo(className,"Before", beanName, method.getName(), affectedBeanName);
-                                        String affectedMethodName = affectedLevels[affectedLevels.length-1];
-                                        AdviceInfo ai = new AdviceInfo(className,"Around", beanName, method.getName(), affectedMethodName);
-                                        if (!joinPointMap.containsKey(affectedBeanName) || joinPointMap.get(affectedBeanName) == null) {
-                                            joinPointMap.put(affectedBeanName, new ArrayList<>());
-                                        }
-                                        joinPointMap.get(affectedBeanName).add(ai);
-                                    }
-                                }
-                            }
-                        }
                         BeanDefinition beanDefinition = new BeanDefinition();
                         beanDefinition.setClazz(clazz);
                         if (clazz.isAnnotationPresent(Scope.class)) {
@@ -258,17 +295,54 @@ public class ZhouyuApplicationContext {
         }
     }
 
-    public static String lowercaseFirstLetter(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-        char firstChar = Character.toLowerCase(input.charAt(0));
-        if (input.length() > 1) {
-            return firstChar + input.substring(1);
-        } else {
-            return String.valueOf(firstChar);
+    private void handleAspectClass(String className, Class<?> clazz, String beanName) {
+        // 处理切面类
+        if (clazz.isAnnotationPresent(Aspect.class)) {
+            // 遍历切面类中的所有方法
+            for (Method method: clazz.getDeclaredMethods()) {
+                // 查看是否有切面前置通知
+                if (method.isAnnotationPresent(Before.class)) {
+                    // 切点 pointcut
+                    String expression = method.getAnnotation(Before.class).value();
+                    saveAdvices(className, beanName, method, expression, "Before");
+                }
+                // 查看是否有切面后置通知
+                if (method.isAnnotationPresent(After.class)) {
+                    // 切点 pointcut
+                    String expression = method.getAnnotation(After.class).value();
+                    saveAdvices(className, beanName, method, expression, "After");
+                }
+                  // 查看是否有切面相关的环绕通知
+                if (method.isAnnotationPresent(Around.class)) {
+                    // 切点 pointcut
+                    String expression = method.getAnnotation(Around.class).value();
+                    saveAdvices(className, beanName, method, expression, "Around");
+                }
+            }
         }
     }
+
+    private void saveAdvices(String className, String beanName, Method method, String expression, String adviceType) {
+
+
+        // 分裂表达式获取该通知适用的所有方法
+        String[] joinPoints = expression.split(";");
+
+        for (String joinPointClass : joinPoints) {
+            System.out.println("joinPointClassPath:"+joinPointClass);
+            String[] affectedLevels = joinPointClass.split("\\.");
+            System.out.println("length: "+affectedLevels.length);
+            String affectedBeanName = affectedLevels[affectedLevels.length-2];
+            affectedBeanName = Character.toLowerCase(affectedBeanName.charAt(0)) + affectedBeanName.substring(1); // 首字母小写对应bean的名称
+            String affectedMethodName = affectedLevels[affectedLevels.length-1];//获取连接点的方法
+            AdviceInfo ai = new AdviceInfo(className,adviceType, beanName, method.getName(), affectedMethodName);
+            if (!adviceInfoMap.containsKey(affectedBeanName) || adviceInfoMap.get(affectedBeanName) == null) {
+                adviceInfoMap.put(affectedBeanName, new ArrayList<>());
+            }
+            adviceInfoMap.get(affectedBeanName).add(ai);
+        }
+    }
+
 
     public Object getBean(String beanName) {
 
